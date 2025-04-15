@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Decentralized Chat (WebRTC)</title>
+  <style>
+    body { font-family: sans-serif; padding: 1rem; max-width: 600px; margin: auto; }
+    textarea, input { width: 100%; margin-top: 0.5rem; padding: 0.5rem; font-family: monospace; }
+    #chat { border: 1px solid #ccc; padding: 0.5rem; height: 200px; overflow-y: scroll; margin-top: 1rem; background: #f9f9f9; }
+    .message { margin: 0.25rem 0; }
+    button { padding: 0.5rem 1rem; margin-top: 0.5rem; }
+  </style>
+</head>
+<body>
+  <h1>🕸️ Decentralized Chat</h1>
+
+  <label>Your Message:</label>
+  <input id="msgInput" placeholder="Type your message..." />
+  <button onclick="sendMessage()">Send</button>
+
+  <div id="chat"></div>
+
+  <h3>1️⃣ Create Offer (Sender)</h3>
+  <button onclick="createOffer()">Create Offer</button>
+  <textarea id="offer" placeholder="Offer will appear here..."></textarea>
+
+  <h3>2️⃣ Paste Answer (Sender)</h3>
+  <textarea id="answer" placeholder="Paste answer here..." oninput="receiveAnswer()"></textarea>
+
+  <h3>3️⃣ Paste Offer (Receiver)</h3>
+  <textarea id="remoteOffer" placeholder="Paste offer here..." oninput="receiveOffer()"></textarea>
+  <button onclick="createAnswer()">Create Answer</button>
+  <textarea id="localAnswer" placeholder="Your answer will appear here..."></textarea>
+
+  <script>
+    const chat = document.getElementById("chat");
+    const msgInput = document.getElementById("msgInput");
+    let pc = new RTCPeerConnection();
+    let channel;
+
+    function logMessage(msg, from = "You") {
+      const div = document.createElement("div");
+      div.className = "message";
+      div.textContent = `${from}: ${msg}`;
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    function sendMessage() {
+      const message = msgInput.value.trim();
+      if (message && channel && channel.readyState === "open") {
+        channel.send(message);
+        logMessage(message);
+        msgInput.value = "";
+      }
+    }
+
+    function createOffer() {
+      channel = pc.createDataChannel("chat");
+      setupChannel();
+      pc.createOffer().then(offer => {
+        pc.setLocalDescription(offer);
+        document.getElementById("offer").value = JSON.stringify(offer);
+      });
+    }
+
+    function receiveAnswer() {
+      const answerText = document.getElementById("answer").value;
+      if (answerText) {
+        const answer = JSON.parse(answerText);
+        pc.setRemoteDescription(new RTCSessionDescription(answer));
+      }
+    }
+
+    function receiveOffer() {
+      const offerText = document.getElementById("remoteOffer").value;
+      if (offerText) {
+        const offer = JSON.parse(offerText);
+        pc.setRemoteDescription(new RTCSessionDescription(offer));
+      }
+    }
+
+    function createAnswer() {
+      pc.ondatachannel = event => {
+        channel = event.channel;
+        setupChannel();
+      };
+      pc.createAnswer().then(answer => {
+        pc.setLocalDescription(answer);
+        document.getElementById("localAnswer").value = JSON.stringify(answer);
+      });
+    }
+
+    function setupChannel() {
+      channel.onopen = () => logMessage("Channel open", "System");
+      channel.onmessage = e => logMessage(e.data, "Peer");
+    }
+
+    // Optional STUN server for NAT traversal
+    pc = new RTCPeerConnection({
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+    });
+
+    pc.onicecandidate = e => {
+      if (e.candidate) return;
+      // When gathering is complete, update UI with final offer/answer
+      if (pc.localDescription) {
+        if (pc.localDescription.type === "offer") {
+          document.getElementById("offer").value = JSON.stringify(pc.localDescription);
+        } else {
+          document.getElementById("localAnswer").value = JSON.stringify(pc.localDescription);
+        }
+      }
+    };
+  </script>
+</body>
+</html>
