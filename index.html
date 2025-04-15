@@ -2,62 +2,95 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>Decentralized Chat (WebRTC)</title>
+  <title>3DVR Group Chat (Decentralized)</title>
   <style>
-    body { font-family: sans-serif; padding: 1rem; max-width: 600px; margin: auto; }
-    textarea, input { width: 100%; margin-top: 0.5rem; padding: 0.5rem; font-family: monospace; }
-    #chat { border: 1px solid #ccc; padding: 0.5rem; height: 200px; overflow-y: scroll; margin-top: 1rem; background: #f9f9f9; }
-    .message { margin: 0.25rem 0; }
-    button { padding: 0.5rem 1rem; margin-top: 0.5rem; }
+    body { font-family: sans-serif; padding: 1rem; max-width: 700px; margin: auto; background: #f0f0f5; }
+    h1 { text-align: center; }
+    #instructions { background: #fffbe6; padding: 1rem; border: 1px solid #ccc; border-radius: 5px; margin-bottom: 1rem; }
+    #chat { background: #fff; border: 1px solid #ccc; padding: 1rem; height: 300px; overflow-y: auto; border-radius: 5px; display: flex; flex-direction: column; }
+    .bubble { padding: 0.5rem 0.75rem; border-radius: 10px; margin: 0.25rem 0; max-width: 80%; display: inline-block; }
+    .me { background: #d1ffd1; align-self: flex-end; text-align: right; margin-left: auto; }
+    .them { background: #e1e1ff; align-self: flex-start; text-align: left; margin-right: auto; }
+    #inputBox { display: flex; margin-top: 1rem; }
+    input { flex: 1; padding: 0.5rem; font-size: 1rem; }
+    button { padding: 0.5rem 1rem; font-size: 1rem; margin-left: 0.5rem; }
+    textarea { width: 100%; margin-top: 0.5rem; font-family: monospace; }
+    .section { margin-top: 1.5rem; }
+    label { font-weight: bold; margin-top: 0.5rem; display: block; }
   </style>
 </head>
 <body>
-  <h1>🕸️ Decentralized Chat</h1>
+  <h1>🌐 3DVR Group Chat (Decentralized)</h1>
 
-  <label>Your Message:</label>
-  <input id="msgInput" placeholder="Type your message..." />
-  <button onclick="sendMessage()">Send</button>
+  <div id="instructions">
+    <p><strong>Welcome!</strong> This is a peer-to-peer group chat app for 3dvr discussions — no accounts, no servers. To connect:</p>
+    <ol>
+      <li><strong>Start a new chat:</strong> Click "Create Offer" and share it with others.</li>
+      <li><strong>Join a chat:</strong> Paste an offer into the box and generate an answer.</li>
+      <li><strong>Send the answer back</strong> to the original person to complete the connection.</li>
+      <li><strong>Repeat</strong> for every peer who wants to join!</li>
+    </ol>
+    <p>We recommend hosting this file on your own site or on <a href="https://ipfs.tech" target="_blank">IPFS</a> for easy access.</p>
+  </div>
 
   <div id="chat"></div>
 
-  <h3>1️⃣ Create Offer (Sender)</h3>
-  <button onclick="createOffer()">Create Offer</button>
-  <textarea id="offer" placeholder="Offer will appear here..."></textarea>
+  <div id="inputBox">
+    <input id="msgInput" placeholder="Type your message..." />
+    <button onclick="sendMessage()">Send</button>
+  </div>
 
-  <h3>2️⃣ Paste Answer (Sender)</h3>
-  <textarea id="answer" placeholder="Paste answer here..." oninput="receiveAnswer()"></textarea>
+  <div class="section">
+    <h3>1️⃣ Start a New Chat (Create Offer)</h3>
+    <button onclick="createOffer()">Create Offer</button>
+    <textarea id="offer" placeholder="Copy this and share..."></textarea>
+  </div>
 
-  <h3>3️⃣ Paste Offer (Receiver)</h3>
-  <textarea id="remoteOffer" placeholder="Paste offer here..." oninput="receiveOffer()"></textarea>
-  <button onclick="createAnswer()">Create Answer</button>
-  <textarea id="localAnswer" placeholder="Your answer will appear here..."></textarea>
+  <div class="section">
+    <h3>2️⃣ Complete Connection (Paste Answer)</h3>
+    <textarea id="answer" placeholder="Paste answer here..." oninput="receiveAnswer()"></textarea>
+  </div>
+
+  <div class="section">
+    <h3>3️⃣ Join an Existing Chat (Paste Offer)</h3>
+    <textarea id="remoteOffer" placeholder="Paste offer here..." oninput="receiveOffer()"></textarea>
+    <button onclick="createAnswer()">Create Answer</button>
+    <textarea id="localAnswer" placeholder="Copy and send this back..."></textarea>
+  </div>
 
   <script>
-    const chat = document.getElementById("chat");
-    const msgInput = document.getElementById("msgInput");
-    let pc = new RTCPeerConnection();
-    let channel;
+    let pc = new RTCPeerConnection({
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+    });
+    let channels = [];
 
-    function logMessage(msg, from = "You") {
+    const chat = document.getElementById("chat");
+
+    function sendMessage() {
+      const msg = document.getElementById("msgInput").value.trim();
+      if (!msg) return;
+      channels.forEach(c => c.readyState === "open" && c.send(msg));
+      addMessage(msg, "me");
+      document.getElementById("msgInput").value = "";
+    }
+
+    function addMessage(msg, sender) {
       const div = document.createElement("div");
-      div.className = "message";
-      div.textContent = `${from}: ${msg}`;
+      div.className = "bubble " + (sender === "me" ? "me" : "them");
+      div.textContent = msg;
       chat.appendChild(div);
       chat.scrollTop = chat.scrollHeight;
     }
 
-    function sendMessage() {
-      const message = msgInput.value.trim();
-      if (message && channel && channel.readyState === "open") {
-        channel.send(message);
-        logMessage(message);
-        msgInput.value = "";
-      }
+    function setupChannel(channel) {
+      channels.push(channel);
+      channel.onopen = () => addMessage("🟢 Connected to a new peer", "them");
+      channel.onmessage = e => addMessage(e.data, "them");
     }
 
     function createOffer() {
-      channel = pc.createDataChannel("chat");
-      setupChannel();
+      const ch = pc.createDataChannel("chat");
+      setupChannel(ch);
       pc.createOffer().then(offer => {
         pc.setLocalDescription(offer);
         document.getElementById("offer").value = JSON.stringify(offer);
@@ -65,51 +98,33 @@
     }
 
     function receiveAnswer() {
-      const answerText = document.getElementById("answer").value;
-      if (answerText) {
-        const answer = JSON.parse(answerText);
-        pc.setRemoteDescription(new RTCSessionDescription(answer));
+      const txt = document.getElementById("answer").value;
+      if (txt) {
+        const desc = JSON.parse(txt);
+        pc.setRemoteDescription(new RTCSessionDescription(desc));
       }
     }
 
     function receiveOffer() {
-      const offerText = document.getElementById("remoteOffer").value;
-      if (offerText) {
-        const offer = JSON.parse(offerText);
-        pc.setRemoteDescription(new RTCSessionDescription(offer));
+      const txt = document.getElementById("remoteOffer").value;
+      if (txt) {
+        const desc = JSON.parse(txt);
+        pc.setRemoteDescription(new RTCSessionDescription(desc));
       }
     }
 
     function createAnswer() {
-      pc.ondatachannel = event => {
-        channel = event.channel;
-        setupChannel();
-      };
+      pc.ondatachannel = e => setupChannel(e.channel);
       pc.createAnswer().then(answer => {
         pc.setLocalDescription(answer);
         document.getElementById("localAnswer").value = JSON.stringify(answer);
       });
     }
 
-    function setupChannel() {
-      channel.onopen = () => logMessage("Channel open", "System");
-      channel.onmessage = e => logMessage(e.data, "Peer");
-    }
-
-    // Optional STUN server for NAT traversal
-    pc = new RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-    });
-
     pc.onicecandidate = e => {
-      if (e.candidate) return;
-      // When gathering is complete, update UI with final offer/answer
-      if (pc.localDescription) {
-        if (pc.localDescription.type === "offer") {
-          document.getElementById("offer").value = JSON.stringify(pc.localDescription);
-        } else {
-          document.getElementById("localAnswer").value = JSON.stringify(pc.localDescription);
-        }
+      if (!e.candidate && pc.localDescription) {
+        const field = pc.localDescription.type === "offer" ? "offer" : "localAnswer";
+        document.getElementById(field).value = JSON.stringify(pc.localDescription);
       }
     };
   </script>
