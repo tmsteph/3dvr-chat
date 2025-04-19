@@ -2,36 +2,22 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>3DVR Group Chat (Decentralized)</title>
+  <title>3DVR Group Chat (GUN.js)</title>
+  <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
   <style>
     body { font-family: sans-serif; padding: 1rem; max-width: 700px; margin: auto; background: #f0f0f5; }
     h1 { text-align: center; }
-    #instructions { background: #fffbe6; padding: 1rem; border: 1px solid #ccc; border-radius: 5px; margin-bottom: 1rem; }
     #chat { background: #fff; border: 1px solid #ccc; padding: 1rem; height: 300px; overflow-y: auto; border-radius: 5px; display: flex; flex-direction: column; }
     .bubble { padding: 0.5rem 0.75rem; border-radius: 10px; margin: 0.25rem 0; max-width: 80%; display: inline-block; }
-    .me { background: #d1ffd1; align-self: flex-end; text-align: right; margin-left: auto; }
-    .them { background: #e1e1ff; align-self: flex-start; text-align: left; margin-right: auto; }
+    .me { background: #d1ffd1; align-self: flex-end; text-align: right; }
+    .them { background: #e1e1ff; align-self: flex-start; text-align: left; }
     #inputBox { display: flex; margin-top: 1rem; }
     input { flex: 1; padding: 0.5rem; font-size: 1rem; }
     button { padding: 0.5rem 1rem; font-size: 1rem; margin-left: 0.5rem; }
-    textarea { width: 100%; margin-top: 0.5rem; font-family: monospace; }
-    .section { margin-top: 1.5rem; }
-    label { font-weight: bold; margin-top: 0.5rem; display: block; }
   </style>
 </head>
 <body>
-  <h1>🌐 3DVR Group Chat (Decentralized)</h1>
-
-  <div id="instructions">
-    <p><strong>Welcome!</strong> This is a peer-to-peer group chat app for 3dvr discussions — no accounts, no servers. To connect:</p>
-    <ol>
-      <li><strong>Start a new chat:</strong> Click "Create Offer" and share it with others.</li>
-      <li><strong>Join a chat:</strong> Paste an offer into the box and generate an answer.</li>
-      <li><strong>Send the answer back</strong> to the original person to complete the connection.</li>
-      <li><strong>Repeat</strong> for every peer who wants to join!</li>
-    </ol>
-    <p>We recommend hosting this file on your own site or on <a href="https://ipfs.tech" target="_blank">IPFS</a> for easy access.</p>
-  </div>
+  <h1>🌐 3DVR Chat (GUN.js)</h1>
 
   <div id="chat"></div>
 
@@ -40,93 +26,29 @@
     <button onclick="sendMessage()">Send</button>
   </div>
 
-  <div class="section">
-    <h3>1️⃣ Start a New Chat (Create Offer)</h3>
-    <button onclick="createOffer()">Create Offer</button>
-    <textarea id="offer" placeholder="Copy this and share..."></textarea>
-  </div>
-
-  <div class="section">
-    <h3>2️⃣ Complete Connection (Paste Answer)</h3>
-    <textarea id="answer" placeholder="Paste answer here..." oninput="receiveAnswer()"></textarea>
-  </div>
-
-  <div class="section">
-    <h3>3️⃣ Join an Existing Chat (Paste Offer)</h3>
-    <textarea id="remoteOffer" placeholder="Paste offer here..." oninput="receiveOffer()"></textarea>
-    <button onclick="createAnswer()">Create Answer</button>
-    <textarea id="localAnswer" placeholder="Copy and send this back..."></textarea>
-  </div>
-
   <script>
-    let pc = new RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-    });
-    let channels = [];
+    const gun = Gun();
+    const chat = gun.get('3dvr-global-chat');
+    const username = "user-" + Math.floor(Math.random() * 1000);
+    const chatBox = document.getElementById("chat");
 
-    const chat = document.getElementById("chat");
-
+    // Send message
     function sendMessage() {
       const msg = document.getElementById("msgInput").value.trim();
       if (!msg) return;
-      channels.forEach(c => c.readyState === "open" && c.send(msg));
-      addMessage(msg, "me");
+      chat.set({ user: username, text: msg, ts: Date.now() });
       document.getElementById("msgInput").value = "";
     }
 
-    function addMessage(msg, sender) {
+    // Display messages
+    chat.map().on((data, key) => {
+      if (!data || !data.text) return;
       const div = document.createElement("div");
-      div.className = "bubble " + (sender === "me" ? "me" : "them");
-      div.textContent = msg;
-      chat.appendChild(div);
-      chat.scrollTop = chat.scrollHeight;
-    }
-
-    function setupChannel(channel) {
-      channels.push(channel);
-      channel.onopen = () => addMessage("🟢 Connected to a new peer", "them");
-      channel.onmessage = e => addMessage(e.data, "them");
-    }
-
-    function createOffer() {
-      const ch = pc.createDataChannel("chat");
-      setupChannel(ch);
-      pc.createOffer().then(offer => {
-        pc.setLocalDescription(offer);
-        document.getElementById("offer").value = JSON.stringify(offer);
-      });
-    }
-
-    function receiveAnswer() {
-      const txt = document.getElementById("answer").value;
-      if (txt) {
-        const desc = JSON.parse(txt);
-        pc.setRemoteDescription(new RTCSessionDescription(desc));
-      }
-    }
-
-    function receiveOffer() {
-      const txt = document.getElementById("remoteOffer").value;
-      if (txt) {
-        const desc = JSON.parse(txt);
-        pc.setRemoteDescription(new RTCSessionDescription(desc));
-      }
-    }
-
-    function createAnswer() {
-      pc.ondatachannel = e => setupChannel(e.channel);
-      pc.createAnswer().then(answer => {
-        pc.setLocalDescription(answer);
-        document.getElementById("localAnswer").value = JSON.stringify(answer);
-      });
-    }
-
-    pc.onicecandidate = e => {
-      if (!e.candidate && pc.localDescription) {
-        const field = pc.localDescription.type === "offer" ? "offer" : "localAnswer";
-        document.getElementById(field).value = JSON.stringify(pc.localDescription);
-      }
-    };
+      div.className = "bubble " + (data.user === username ? "me" : "them");
+      div.textContent = `${data.text}`;
+      chatBox.appendChild(div);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    });
   </script>
 </body>
 </html>
