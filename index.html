@@ -5,15 +5,57 @@
   <title>3DVR Group Chat (GUN.js)</title>
   <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
   <style>
-    body { font-family: sans-serif; padding: 1rem; max-width: 700px; margin: auto; background: #f0f0f5; }
-    h1 { text-align: center; }
-    #chat { background: #fff; border: 1px solid #ccc; padding: 1rem; height: 300px; overflow-y: auto; border-radius: 5px; display: flex; flex-direction: column; }
-    .bubble { padding: 0.5rem 0.75rem; border-radius: 10px; margin: 0.25rem 0; max-width: 80%; display: inline-block; }
-    .me { background: #d1ffd1; align-self: flex-end; text-align: right; }
-    .them { background: #e1e1ff; align-self: flex-start; text-align: left; }
-    #inputBox { display: flex; margin-top: 1rem; }
-    input { flex: 1; padding: 0.5rem; font-size: 1rem; }
-    button { padding: 0.5rem 1rem; font-size: 1rem; margin-left: 0.5rem; }
+    body {
+      font-family: sans-serif;
+      padding: 1rem;
+      max-width: 700px;
+      margin: auto;
+      background: #f0f0f5;
+    }
+    h1 {
+      text-align: center;
+    }
+    #chat {
+      background: #fff;
+      border: 1px solid #ccc;
+      padding: 1rem;
+      height: 300px;
+      overflow-y: auto;
+      border-radius: 5px;
+      display: flex;
+      flex-direction: column;
+    }
+    .bubble {
+      padding: 0.5rem 0.75rem;
+      border-radius: 10px;
+      margin: 0.25rem 0;
+      max-width: 80%;
+      display: inline-block;
+    }
+    .me {
+      background: #d1ffd1;
+      align-self: flex-end;
+      text-align: right;
+    }
+    .them {
+      background: #e1e1ff;
+      align-self: flex-start;
+      text-align: left;
+    }
+    #inputBox {
+      display: flex;
+      margin-top: 1rem;
+    }
+    input {
+      flex: 1;
+      padding: 0.5rem;
+      font-size: 1rem;
+    }
+    button {
+      padding: 0.5rem 1rem;
+      font-size: 1rem;
+      margin-left: 0.5rem;
+    }
   </style>
 </head>
 <body>
@@ -27,25 +69,38 @@
   </div>
 
   <script>
-    const gun = Gun();
+    // Connect to a public relay peer
+    const gun = Gun({
+      peers: ['https://gun-manhattan.herokuapp.com/gun']
+    });
+
     const chat = gun.get('3dvr-global-chat');
-    const username = "user-" + Math.floor(Math.random() * 1000);
     const chatBox = document.getElementById("chat");
 
-    // Send message
+    // Unique temporary username
+    const username = "user-" + Math.floor(Math.random() * 10000);
+
     function sendMessage() {
       const msg = document.getElementById("msgInput").value.trim();
       if (!msg) return;
-      chat.set({ user: username, text: msg, ts: Date.now() });
+      chat.set({
+        user: username,
+        text: msg,
+        ts: Date.now()
+      });
       document.getElementById("msgInput").value = "";
     }
 
-    // Display messages
+    // Keep track of messages we've already rendered
+    const rendered = new Set();
+
     chat.map().on((data, key) => {
-      if (!data || !data.text) return;
+      if (!data || !data.text || rendered.has(key)) return;
+      rendered.add(key);
+
       const div = document.createElement("div");
       div.className = "bubble " + (data.user === username ? "me" : "them");
-      div.textContent = `${data.text}`;
+      div.textContent = data.text;
       chatBox.appendChild(div);
       chatBox.scrollTop = chatBox.scrollHeight;
     });
